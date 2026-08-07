@@ -1,0 +1,52 @@
+name: APK bauen
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Projekt auschecken
+        uses: actions/checkout@v4
+
+      - name: Projekt entpacken (falls als ZIP hochgeladen statt einzelner Dateien)
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -iname "*.zip" | head -n1)
+          if [ -n "$ZIP_FILE" ]; then
+            echo "Gefundene ZIP-Datei: $ZIP_FILE — entpacke…"
+            unzip -o "$ZIP_FILE" -d _extracted
+            SRC_DIR=$(find _extracted -maxdepth 3 -name "settings.gradle.kts" -exec dirname {} \; | head -n1)
+            if [ -n "$SRC_DIR" ]; then
+              cp -r "$SRC_DIR"/. .
+              echo "Projekt aus $SRC_DIR ins Hauptverzeichnis kopiert."
+            else
+              echo "Konnte settings.gradle.kts in der ZIP nicht finden!"
+              exit 1
+            fi
+          fi
+
+      - name: JDK 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Android SDK einrichten
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle installieren
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: APK bauen (Debug, sofort installierbar)
+        run: gradle assembleDebug --stacktrace
+
+      - name: APK als Download bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnrufKarte-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
