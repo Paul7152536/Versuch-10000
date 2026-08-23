@@ -1,0 +1,51 @@
+name: Cleanup Artifacts und alte Läufe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Alle Artifacts löschen
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo }
+            );
+            console.log(`Gefundene Artifacts: ${artifacts.length}`);
+            for (const artifact of artifacts) {
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id
+              });
+              console.log(`Gelöscht: ${artifact.name} (${artifact.id})`);
+            }
+
+      - name: Alte Workflow-Läufe löschen (außer diesem)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo }
+            );
+            console.log(`Gefundene Läufe: ${runs.length}`);
+            for (const run of runs) {
+              if (run.id === context.runId) continue;
+              try {
+                await github.rest.actions.deleteWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id
+                });
+                console.log(`Gelöscht: Lauf ${run.id} (${run.name})`);
+              } catch (e) {
+                console.log(`Konnte Lauf ${run.id} nicht löschen: ${e.message}`);
+              }
+            }
